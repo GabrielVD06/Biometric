@@ -1,0 +1,14 @@
+C:\repos\Biometric\K30Integration\bin\Debug\net10.0\K30Integration.exe
+C:\repos\Biometric\K30Integration\bin\Debug\net10.0\K30Integration.deps.json
+C:\repos\Biometric\K30Integration\bin\Debug\net10.0\K30Integration.runtimeconfig.json
+C:\repos\Biometric\K30Integration\bin\Debug\net10.0\K30Integration.dll
+C:\repos\Biometric\K30Integration\bin\Debug\net10.0\K30Integration.pdb
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\K30Integration.GeneratedMSBuildEditorConfig.editorconfig
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\K30Integration.AssemblyInfoInputs.cache
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\K30Integration.AssemblyInfo.cs
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\K30Integration.csproj.CoreCompileInputs.cache
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\K30Integration.dll
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\refint\K30Integration.dll
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\K30Integration.pdb
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\K30Integration.genruntimeconfig.cache
+C:\repos\Biometric\K30Integration\obj\Debug\net10.0\ref\K30Integration.dll

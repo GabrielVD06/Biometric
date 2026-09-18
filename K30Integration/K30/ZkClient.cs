@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Text;
+using K30Integration.K30.Models;
 
 namespace K30Integration.K30;
 
@@ -28,7 +29,9 @@ public class ZkClient : IDisposable
     // CONSTRUCTOR
     // ============================================================
 
-    public ZkClient(string ip, int port = 4370)
+    public ZkClient(
+        string ip,
+        int port = 4370)
     {
         _ip = ip;
         _port = port;
@@ -66,7 +69,8 @@ public class ZkClient : IDisposable
                 $"Command={response.Command}");
         }
 
-        _sessionId = response.SessionId;
+        _sessionId =
+            response.SessionId;
 
         _replyId = 0;
 
@@ -170,192 +174,6 @@ public class ZkClient : IDisposable
 
 
     // ============================================================
-    // REALTIME
-    // ============================================================
-
-    public async Task EnableRealtimeAsync()
-    {
-        EnsureConnected();
-
-        byte[] data =
-        [
-            0xFF,
-            0xFF,
-            0x00,
-            0x00
-        ];
-
-        Console.WriteLine();
-        Console.WriteLine(
-            "Habilitando eventos realtime...");
-
-        ZkResponse response =
-            await SendAsync(
-                ZkProtocol.CMD_REG_EVENT,
-                data);
-
-        Console.WriteLine(
-            $"Realtime response: " +
-            $"Command={response.Command}");
-
-        if (!response.IsOk)
-        {
-            throw new InvalidOperationException(
-                $"El K30 rechazó CMD_REG_EVENT. " +
-                $"Command={response.Command}");
-        }
-
-        Console.WriteLine(
-            "Eventos realtime habilitados.");
-    }
-
-
-    public async Task<ZkRealtimeEvent> WaitForRealtimeEventAsync(
-        CancellationToken cancellationToken = default)
-    {
-        EnsureConnected();
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            ZkPacket packet =
-                await ReadPacketAsync(
-                    cancellationToken);
-
-            if (packet.Command !=
-                ZkProtocol.CMD_REG_EVENT)
-            {
-                Console.WriteLine();
-
-                Console.WriteLine(
-                    "Paquete recibido mientras " +
-                    "esperábamos evento: " +
-                    $"Command={packet.Command}");
-
-                continue;
-            }
-
-            ZkRealtimeEvent realtimeEvent =
-                ParseRealtimeEvent(packet);
-
-            await SendRealtimeAckAsync(
-                packet.ReplyId,
-                cancellationToken);
-
-            return realtimeEvent;
-        }
-
-        throw new OperationCanceledException(
-            cancellationToken);
-    }
-
-
-    private async Task SendRealtimeAckAsync(
-        ushort replyId,
-        CancellationToken cancellationToken)
-    {
-        EnsureConnected();
-
-        ZkPacket packet = new()
-        {
-            Command = ZkProtocol.CMD_ACK_OK,
-            SessionId = _sessionId,
-            ReplyId = replyId,
-            Data = []
-        };
-
-        byte[] bytes =
-            packet.Encode();
-
-        Console.WriteLine(
-            $"TX REALTIME ACK: " +
-            $"{Convert.ToHexString(bytes)}");
-
-        await _stream!.WriteAsync(
-            bytes,
-            cancellationToken);
-
-        await _stream.FlushAsync(
-            cancellationToken);
-    }
-
-
-    private static ZkRealtimeEvent ParseRealtimeEvent(
-        ZkPacket packet)
-    {
-        ushort eventCode =
-            packet.SessionId;
-
-        byte[] data =
-            packet.Data ?? [];
-
-        return new ZkRealtimeEvent
-        {
-            EventCode = eventCode,
-            Data = data,
-            UserId = ParseUserId(data),
-            Timestamp = ParseRealtimeTimestamp(data)
-        };
-    }
-
-
-    private static string ParseUserId(
-        byte[] data)
-    {
-        if (data.Length < 9)
-            return string.Empty;
-
-        return Encoding.ASCII
-            .GetString(data, 0, 9)
-            .Trim(
-                '\0',
-                ' ',
-                '\r',
-                '\n');
-    }
-
-
-    private static DateTime? ParseRealtimeTimestamp(
-        byte[] data)
-    {
-        if (data.Length < 32)
-            return null;
-
-        int year =
-            2000 + data[26];
-
-        int month =
-            data[27];
-
-        int day =
-            data[28];
-
-        int hour =
-            data[29];
-
-        int minute =
-            data[30];
-
-        int second =
-            data[31];
-
-        try
-        {
-            return new DateTime(
-                year,
-                month,
-                day,
-                hour,
-                minute,
-                second);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-
-    // ============================================================
     // OPTIONS
     // ============================================================
 
@@ -414,7 +232,7 @@ public class ZkClient : IDisposable
 
 
     // ============================================================
-    // READ ATTENDANCE
+    // READ ATTENDANCE RAW
     // ============================================================
 
     public async Task<byte[]> ReadAttendanceRawAsync()
@@ -437,10 +255,6 @@ public class ZkClient : IDisposable
 
         try
         {
-            // ----------------------------------------------------
-            // 1. Solicitar historial
-            // ----------------------------------------------------
-
             Console.WriteLine();
             Console.WriteLine(
                 "Solicitando historial de asistencias...");
@@ -474,20 +288,15 @@ public class ZkClient : IDisposable
                     "no contiene el tamaño de los datos.");
             }
 
-
-            // ----------------------------------------------------
-            // 2. Obtener tamaño total
-            // ----------------------------------------------------
-
             uint totalSize =
-                BinaryPrimitives.ReadUInt32LittleEndian(
-                    prepareResponse.Data.AsSpan(0, 4));
+                BinaryPrimitives
+                    .ReadUInt32LittleEndian(
+                        prepareResponse.Data.AsSpan(0, 4));
 
             Console.WriteLine();
             Console.WriteLine(
                 $"Tamaño total anunciado por K30: " +
                 $"{totalSize} bytes");
-
 
             if (totalSize == 0)
             {
@@ -499,11 +308,6 @@ public class ZkClient : IDisposable
 
                 return [];
             }
-
-
-            // ----------------------------------------------------
-            // 3. Recibir CMD_DATA
-            // ----------------------------------------------------
 
             List<byte> allData =
                 new((int)totalSize);
@@ -549,11 +353,6 @@ public class ZkClient : IDisposable
                     $"{allData.Count}/{totalSize}");
             }
 
-
-            // ----------------------------------------------------
-            // 4. Ajustar exactamente al tamaño anunciado
-            // ----------------------------------------------------
-
             if (allData.Count > totalSize)
             {
                 allData =
@@ -564,11 +363,6 @@ public class ZkClient : IDisposable
 
             byte[] result =
                 allData.ToArray();
-
-
-            // ----------------------------------------------------
-            // 5. Mostrar información de la transferencia
-            // ----------------------------------------------------
 
             Console.WriteLine();
             Console.WriteLine(
@@ -597,19 +391,7 @@ public class ZkClient : IDisposable
                         $"Registros detectados: " +
                         $"{recordCount}");
                 }
-                else
-                {
-                    Console.WriteLine(
-                        "El tamaño de registros no es " +
-                        "múltiplo de 40; lo analizaremos " +
-                        "en el siguiente paso.");
-                }
             }
-
-
-            // ----------------------------------------------------
-            // 6. Liberar buffer del K30
-            // ----------------------------------------------------
 
             await FreeDataAsync();
 
@@ -617,11 +399,252 @@ public class ZkClient : IDisposable
         }
         finally
         {
-            // ----------------------------------------------------
-            // 7. Volver a habilitar dispositivo
-            // ----------------------------------------------------
-
             await EnableDeviceAsync();
+        }
+    }
+
+
+    // ============================================================
+    // PARSE ATTENDANCE
+    // ============================================================
+
+    public async Task<List<AttendanceRecord>>
+        ReadAttendanceAsync()
+    {
+        byte[] raw =
+            await ReadAttendanceRawAsync();
+
+        return ParseAttendanceRecords(
+            raw);
+    }
+
+
+    private static List<AttendanceRecord>
+        ParseAttendanceRecords(
+            byte[] raw)
+    {
+        List<AttendanceRecord> records =
+            [];
+
+        if (raw.Length < 4)
+            return records;
+
+        uint recordDataSize =
+            BinaryPrimitives
+                .ReadUInt32LittleEndian(
+                    raw.AsSpan(0, 4));
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "========================================");
+
+        Console.WriteLine(
+            "       PARSING DE ASISTENCIAS           ");
+
+        Console.WriteLine(
+            "========================================");
+
+        Console.WriteLine();
+
+        Console.WriteLine(
+            $"Bytes de registros: {recordDataSize}");
+
+        if (recordDataSize % 40 != 0)
+        {
+            Console.WriteLine(
+                "ADVERTENCIA: el tamaño de los " +
+                "registros no es múltiplo de 40.");
+
+            return records;
+        }
+
+        int recordCount =
+            (int)recordDataSize / 40;
+
+        Console.WriteLine(
+            $"Número de registros: {recordCount}");
+
+        int expectedLength =
+            4 + recordCount * 40;
+
+        if (raw.Length < expectedLength)
+        {
+            Console.WriteLine(
+                "ADVERTENCIA: los datos recibidos " +
+                "están incompletos.");
+
+            return records;
+        }
+
+        for (int i = 0; i < recordCount; i++)
+        {
+            int offset =
+                4 + (i * 40);
+
+            byte[] recordData =
+                raw
+                    .AsSpan(
+                        offset,
+                        40)
+                    .ToArray();
+
+            AttendanceRecord record =
+                ParseAttendanceRecord(
+                    recordData,
+                    i + 1);
+
+            records.Add(record);
+        }
+
+        return records;
+    }
+
+
+    // ============================================================
+    // PARSE ONE ATTENDANCE RECORD
+    // ============================================================
+
+    private static AttendanceRecord
+        ParseAttendanceRecord(
+            byte[] data,
+            int recordNumber)
+    {
+        if (data.Length != 40)
+        {
+            throw new ArgumentException(
+                "Un registro de asistencia " +
+                "debe tener exactamente 40 bytes.");
+        }
+
+
+        // --------------------------------------------------------
+        // User serial
+        // Offset 0 - 2 bytes
+        // --------------------------------------------------------
+
+        ushort userSerial =
+            BinaryPrimitives
+                .ReadUInt16LittleEndian(
+                    data.AsSpan(0, 2));
+
+
+        // --------------------------------------------------------
+        // User ID
+        // Offset 2 - 9 bytes
+        // --------------------------------------------------------
+
+        string userId =
+            Encoding.ASCII
+                .GetString(
+                    data,
+                    2,
+                    9)
+                .Trim(
+                    '\0',
+                    ' ',
+                    '\r',
+                    '\n');
+
+
+        // --------------------------------------------------------
+        // Verify mode
+        // Offset 26 - 1 byte
+        // --------------------------------------------------------
+
+        int verifyMode =
+            data[26];
+
+
+        // --------------------------------------------------------
+        // Timestamp
+        // Offset 27 - 4 bytes
+        // --------------------------------------------------------
+
+        uint packedTime =
+            BinaryPrimitives
+                .ReadUInt32LittleEndian(
+                    data.AsSpan(27, 4));
+
+        DateTime timestamp =
+            DecodeZkTime(
+                packedTime);
+
+
+        // --------------------------------------------------------
+        // Status
+        // Offset 31 - 1 byte
+        // --------------------------------------------------------
+
+        int status =
+            data[31];
+
+
+        return new AttendanceRecord
+        {
+            RecordNumber =
+                recordNumber,
+
+            UserId =
+                userId,
+
+            Timestamp =
+                timestamp,
+
+            VerifyMode =
+                verifyMode,
+
+            Status =
+                status
+        };
+    }
+
+
+    // ============================================================
+    // ZK TIME DECODER
+    // ============================================================
+
+    private static DateTime DecodeZkTime(
+        uint value)
+    {
+        int second =
+            (int)(value % 60);
+
+        value /= 60;
+
+        int minute =
+            (int)(value % 60);
+
+        value /= 60;
+
+        int hour =
+            (int)(value % 24);
+
+        value /= 24;
+
+        int day =
+            (int)(value % 31) + 1;
+
+        value /= 31;
+
+        int month =
+            (int)(value % 12) + 1;
+
+        int year =
+            (int)(value / 12) + 2000;
+
+        try
+        {
+            return new DateTime(
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second);
+        }
+        catch
+        {
+            return DateTime.MinValue;
         }
     }
 
@@ -658,12 +681,219 @@ public class ZkClient : IDisposable
 
 
     // ============================================================
+    // REALTIME
+    // ============================================================
+
+    public async Task EnableRealtimeAsync()
+    {
+        EnsureConnected();
+
+        byte[] data =
+        [
+            0xFF,
+            0xFF,
+            0x00,
+            0x00
+        ];
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Habilitando eventos realtime...");
+
+        ZkResponse response =
+            await SendAsync(
+                ZkProtocol.CMD_REG_EVENT,
+                data);
+
+        Console.WriteLine(
+            $"Realtime response: " +
+            $"Command={response.Command}");
+
+        if (!response.IsOk)
+        {
+            throw new InvalidOperationException(
+                $"El K30 rechazó CMD_REG_EVENT. " +
+                $"Command={response.Command}");
+        }
+
+        Console.WriteLine(
+            "Eventos realtime habilitados.");
+    }
+
+
+    public async Task<ZkRealtimeEvent>
+        WaitForRealtimeEventAsync(
+            CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+
+        while (
+            !cancellationToken.IsCancellationRequested)
+        {
+            ZkPacket packet =
+                await ReadPacketAsync(
+                    cancellationToken);
+
+            if (packet.Command !=
+                ZkProtocol.CMD_REG_EVENT)
+            {
+                Console.WriteLine();
+
+                Console.WriteLine(
+                    "Paquete recibido mientras " +
+                    "esperábamos evento: " +
+                    $"Command={packet.Command}");
+
+                continue;
+            }
+
+            ZkRealtimeEvent realtimeEvent =
+                ParseRealtimeEvent(
+                    packet);
+
+            await SendRealtimeAckAsync(
+                packet.ReplyId,
+                cancellationToken);
+
+            return realtimeEvent;
+        }
+
+        throw new OperationCanceledException(
+            cancellationToken);
+    }
+
+
+    private async Task SendRealtimeAckAsync(
+        ushort replyId,
+        CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+
+        ZkPacket packet = new()
+        {
+            Command =
+                ZkProtocol.CMD_ACK_OK,
+
+            SessionId =
+                _sessionId,
+
+            ReplyId =
+                replyId,
+
+            Data = []
+        };
+
+        byte[] bytes =
+            packet.Encode();
+
+        Console.WriteLine(
+            $"TX REALTIME ACK: " +
+            $"{Convert.ToHexString(bytes)}");
+
+        await _stream!.WriteAsync(
+            bytes,
+            cancellationToken);
+
+        await _stream.FlushAsync(
+            cancellationToken);
+    }
+
+
+    private static ZkRealtimeEvent
+        ParseRealtimeEvent(
+            ZkPacket packet)
+    {
+        ushort eventCode =
+            packet.SessionId;
+
+        byte[] data =
+            packet.Data ?? [];
+
+        return new ZkRealtimeEvent
+        {
+            EventCode =
+                eventCode,
+
+            Data =
+                data,
+
+            UserId =
+                ParseUserId(data),
+
+            Timestamp =
+                ParseRealtimeTimestamp(data)
+        };
+    }
+
+
+    private static string ParseUserId(
+        byte[] data)
+    {
+        if (data.Length < 9)
+            return string.Empty;
+
+        return Encoding.ASCII
+            .GetString(
+                data,
+                0,
+                9)
+            .Trim(
+                '\0',
+                ' ',
+                '\r',
+                '\n');
+    }
+
+
+    private static DateTime? ParseRealtimeTimestamp(
+        byte[] data)
+    {
+        if (data.Length < 32)
+            return null;
+
+        int year =
+            2000 + data[26];
+
+        int month =
+            data[27];
+
+        int day =
+            data[28];
+
+        int hour =
+            data[29];
+
+        int minute =
+            data[30];
+
+        int second =
+            data[31];
+
+        try
+        {
+            return new DateTime(
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+
+    // ============================================================
     // GENERIC COMMAND
     // ============================================================
 
-    public async Task<ZkResponse> SendCommandAsync(
-        ushort command,
-        byte[]? data = null)
+    public async Task<ZkResponse>
+        SendCommandAsync(
+            ushort command,
+            byte[]? data = null)
     {
         return await SendAsync(
             command,
@@ -675,9 +905,10 @@ public class ZkClient : IDisposable
     // LOW LEVEL SEND
     // ============================================================
 
-    private async Task<ZkResponse> SendAsync(
-        ushort command,
-        byte[] data)
+    private async Task<ZkResponse>
+        SendAsync(
+            ushort command,
+            byte[] data)
     {
         EnsureConnected();
 
@@ -686,10 +917,17 @@ public class ZkClient : IDisposable
 
         ZkPacket packet = new()
         {
-            Command = command,
-            SessionId = _sessionId,
-            ReplyId = replyId,
-            Data = data
+            Command =
+                command,
+
+            SessionId =
+                _sessionId,
+
+            ReplyId =
+                replyId,
+
+            Data =
+                data
         };
 
         byte[] bytes =
@@ -698,7 +936,8 @@ public class ZkClient : IDisposable
         Console.WriteLine(
             $"TX: {Convert.ToHexString(bytes)}");
 
-        await _stream!.WriteAsync(bytes);
+        await _stream!.WriteAsync(
+            bytes);
 
         await _stream.FlushAsync();
 
@@ -734,8 +973,9 @@ public class ZkClient : IDisposable
     // READ PACKET
     // ============================================================
 
-    private async Task<ZkPacket> ReadPacketAsync(
-        CancellationToken cancellationToken = default)
+    private async Task<ZkPacket>
+        ReadPacketAsync(
+            CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
@@ -775,7 +1015,8 @@ public class ZkClient : IDisposable
                 cancellationToken);
 
         byte[] completePacket =
-            new byte[8 + payload.Length];
+            new byte[
+                8 + payload.Length];
 
         Buffer.BlockCopy(
             header,
@@ -800,9 +1041,10 @@ public class ZkClient : IDisposable
     // READ EXACT
     // ============================================================
 
-    private async Task<byte[]> ReadExactAsync(
-        int length,
-        CancellationToken cancellationToken)
+    private async Task<byte[]>
+        ReadExactAsync(
+            int length,
+            CancellationToken cancellationToken)
     {
         byte[] buffer =
             new byte[length];
@@ -881,9 +1123,9 @@ public class ZkClient : IDisposable
 }
 
 
-// ================================================================
+// =================================================================
 // REALTIME EVENT
-// ================================================================
+// =================================================================
 
 public class ZkRealtimeEvent
 {

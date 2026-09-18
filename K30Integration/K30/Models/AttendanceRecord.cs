@@ -2,9 +2,13 @@ namespace K30Integration.K30.Models;
 
 public class AttendanceRecord
 {
-    public string UserId { get; set; } = string.Empty;
+    public int RecordNumber { get; set; }
 
-    public string UserName { get; set; } = string.Empty;
+    public string UserId { get; set; } =
+        string.Empty;
+
+    public string UserName { get; set; } =
+        string.Empty;
 
     public DateTime Timestamp { get; set; }
 
@@ -12,35 +16,27 @@ public class AttendanceRecord
 
     public int Status { get; set; }
 
-    public override string ToString()
-    {
-        string name =
-            string.IsNullOrWhiteSpace(UserName)
-                ? "(nombre no resuelto)"
-                : UserName;
 
-        return
-            $"Usuario: {name} | " +
-            $"ID: {UserId} | " +
-            $"Hora: {Timestamp:yyyy-MM-dd HH:mm:ss} | " +
-            $"Método: {GetVerifyModeName()} | " +
-            $"Estado: {GetStatusName()}";
-    }
+    // ============================================================
+    // NOMBRE DEL MÉTODO DE VERIFICACIÓN
+    // ============================================================
 
-    private string GetVerifyModeName()
-    {
-        return VerifyMode switch
+    public string VerifyModeName =>
+        VerifyMode switch
         {
             0 => "Password",
             1 => "Huella",
             2 => "Tarjeta",
             _ => $"Desconocido ({VerifyMode})"
         };
-    }
 
-    private string GetStatusName()
-    {
-        return Status switch
+
+    // ============================================================
+    // NOMBRE DEL ESTADO
+    // ============================================================
+
+    public string StatusName =>
+        Status switch
         {
             0 => "Entrada",
             1 => "Salida",
@@ -50,5 +46,25 @@ public class AttendanceRecord
             5 => "OT salida",
             _ => $"Desconocido ({Status})"
         };
+
+
+    // ============================================================
+    // TO STRING
+    // ============================================================
+
+    public override string ToString()
+    {
+        string name =
+            string.IsNullOrWhiteSpace(UserName)
+                ? "(nombre no resuelto)"
+                : UserName;
+
+        return
+            $"Registro: {RecordNumber} | " +
+            $"Usuario: {name} | " +
+            $"ID: {UserId} | " +
+            $"Hora: {Timestamp:yyyy-MM-dd HH:mm:ss} | " +
+            $"Método: {VerifyModeName} | " +
+            $"Estado: {StatusName}";
     }
 }

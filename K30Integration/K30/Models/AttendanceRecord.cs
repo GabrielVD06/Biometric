@@ -4,11 +4,9 @@ public class AttendanceRecord
 {
     public int RecordNumber { get; set; }
 
-    public string UserId { get; set; } =
-        string.Empty;
+    public string UserId { get; set; } = string.Empty;
 
-    public string UserName { get; set; } =
-        string.Empty;
+    public string UserName { get; set; } = string.Empty;
 
     public DateTime Timestamp { get; set; }
 
@@ -16,10 +14,10 @@ public class AttendanceRecord
 
     public int Status { get; set; }
 
+    public byte[] RawData { get; set; } = [];
 
-    // ============================================================
-    // NOMBRE DEL MÉTODO DE VERIFICACIÓN
-    // ============================================================
+    public string RawHex =>
+        Convert.ToHexString(RawData);
 
     public string VerifyModeName =>
         VerifyMode switch
@@ -29,11 +27,6 @@ public class AttendanceRecord
             2 => "Tarjeta",
             _ => $"Desconocido ({VerifyMode})"
         };
-
-
-    // ============================================================
-    // NOMBRE DEL ESTADO
-    // ============================================================
 
     public string StatusName =>
         Status switch
@@ -47,21 +40,10 @@ public class AttendanceRecord
             _ => $"Desconocido ({Status})"
         };
 
-
-    // ============================================================
-    // TO STRING
-    // ============================================================
-
     public override string ToString()
     {
-        string name =
-            string.IsNullOrWhiteSpace(UserName)
-                ? "(nombre no resuelto)"
-                : UserName;
-
         return
             $"Registro: {RecordNumber} | " +
-            $"Usuario: {name} | " +
             $"ID: {UserId} | " +
             $"Hora: {Timestamp:yyyy-MM-dd HH:mm:ss} | " +
             $"Método: {VerifyModeName} | " +

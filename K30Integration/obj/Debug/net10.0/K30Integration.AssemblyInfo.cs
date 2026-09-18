@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("K30Integration")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+35f7b0c532d1634f5004c259afd94d685d4204a6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5b62a123050f13b197785fe3774d252e98cf9553")]
 [assembly: System.Reflection.AssemblyProductAttribute("K30Integration")]
 [assembly: System.Reflection.AssemblyTitleAttribute("K30Integration")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

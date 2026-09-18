@@ -13,7 +13,7 @@ try
         "========================================");
 
     Console.WriteLine(
-        "       PRUEBA PARSER ASISTENCIAS        ");
+        "       PRUEBA LECTURA ATTLOG K30        ");
 
     Console.WriteLine(
         "========================================");
@@ -44,7 +44,7 @@ try
     Console.WriteLine();
 
     Console.WriteLine(
-        "3. Leyendo y decodificando asistencias...");
+        "3. Leyendo historial de asistencias...");
 
     List<AttendanceRecord> records =
         await k30.ReadAttendanceAsync();
@@ -71,9 +71,12 @@ try
     {
         Console.WriteLine(
             record.ToString());
-    }
 
-    Console.WriteLine();
+        Console.WriteLine(
+            $"RAW: {record.RawHex}");
+
+        Console.WriteLine();
+    }
 
     Console.WriteLine(
         "========================================");

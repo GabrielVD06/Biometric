@@ -16,9 +16,6 @@ public class AttendanceRecord
 
     public byte[] RawData { get; set; } = [];
 
-    public string RawHex =>
-        Convert.ToHexString(RawData);
-
     public string VerifyModeName =>
         VerifyMode switch
         {
@@ -42,8 +39,14 @@ public class AttendanceRecord
 
     public override string ToString()
     {
+        string name =
+            string.IsNullOrWhiteSpace(UserName)
+                ? "(nombre no resuelto)"
+                : UserName;
+
         return
             $"Registro: {RecordNumber} | " +
+            $"Usuario: {name} | " +
             $"ID: {UserId} | " +
             $"Hora: {Timestamp:yyyy-MM-dd HH:mm:ss} | " +
             $"Método: {VerifyModeName} | " +

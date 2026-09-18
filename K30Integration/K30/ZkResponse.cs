@@ -3,9 +3,13 @@ namespace K30Integration.K30;
 public class ZkResponse
 {
     public ushort Command { get; set; }
+
     public ushort Checksum { get; set; }
+
     public ushort SessionId { get; set; }
+
     public ushort ReplyId { get; set; }
+
     public byte[] Data { get; set; } = [];
 
     public bool IsOk =>

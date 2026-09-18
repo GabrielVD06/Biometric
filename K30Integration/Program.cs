@@ -1,159 +1,88 @@
 using K30Integration.K30;
-using K30Integration.K30.Services;
 
 const string K30_IP = "192.168.1.201";
 const int K30_PORT = 4370;
 
-using ZkClient k30 =
-    new(K30_IP, K30_PORT);
-
-CancellationTokenSource cts =
-    new();
-
-Console.CancelKeyPress += (_, e) =>
-{
-    e.Cancel = true;
-    cts.Cancel();
-
-    Console.WriteLine();
-    Console.WriteLine(
-        "Cancelando prueba...");
-};
+using ZkClient k30 = new(K30_IP, K30_PORT);
 
 try
 {
-    Console.WriteLine(
-        "========================================");
-
-    Console.WriteLine(
-        "       K30 REALTIME FINGERPRINT         ");
-
-    Console.WriteLine(
-        "========================================");
-
-    // ------------------------------------------------------------
-    // 1. CONNECT
-    // ------------------------------------------------------------
+    Console.WriteLine("========================================");
+    Console.WriteLine("       PRUEBA HISTORIAL K30             ");
+    Console.WriteLine("========================================");
 
     Console.WriteLine();
-    Console.WriteLine(
-        "1. Conectando...");
+    Console.WriteLine("1. Conectando...");
 
     await k30.ConnectAsync();
 
-    Console.WriteLine(
-        $"Session ID: {k30.SessionId}");
-
-    // ------------------------------------------------------------
-    // 2. DEVICE INFORMATION
-    // ------------------------------------------------------------
+    Console.WriteLine();
+    Console.WriteLine($"Session ID: {k30.SessionId}");
 
     Console.WriteLine();
-    Console.WriteLine(
-        "2. Información del K30...");
+    Console.WriteLine("2. Información del dispositivo...");
 
     await k30.GetOptionAsync("~Platform");
     await k30.GetOptionAsync("~ZKFPVersion");
 
-    // ------------------------------------------------------------
-    // 3. ENABLE REALTIME
-    // ------------------------------------------------------------
+    Console.WriteLine();
+    Console.WriteLine("3. Leyendo historial de asistencias...");
+
+    byte[] data =
+        await k30.ReadAttendanceRawAsync();
+
+    Console.WriteLine();
+    Console.WriteLine("========================================");
+    Console.WriteLine("           RESULTADO DE PRUEBA           ");
+    Console.WriteLine("========================================");
 
     Console.WriteLine();
     Console.WriteLine(
-        "3. Configurando eventos realtime...");
+        $"Bytes recibidos: {data.Length}");
 
-    await k30.EnableRealtimeAsync();
+    if (data.Length > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Datos recibidos:");
 
-    // ------------------------------------------------------------
-    // 4. WAIT FINGER
-    // ------------------------------------------------------------
-
-    AttendanceService attendanceService =
-        new(k30);
-    var record =
-        await attendanceService.WaitForFingerprintAsync(
-            cts.Token);
-
-    // ------------------------------------------------------------
-    // 5. RESULT
-    // ------------------------------------------------------------
-
-    if (record != null)
+        Console.WriteLine(
+            Convert.ToHexString(data));
+    }
+    else
     {
         Console.WriteLine();
         Console.WriteLine(
-            "========================================");
-
-        Console.WriteLine(
-            "              RESULTADO                 ");
-
-        Console.WriteLine(
-            "========================================");
-
-        Console.WriteLine();
-
-        Console.WriteLine(
-            $"Usuario ID : {record.UserId}");
-
-        Console.WriteLine(
-            $"Hora       : {record.Timestamp:yyyy-MM-dd HH:mm:ss}");
-
-        Console.WriteLine
-        ($"Nombre: {record.UserName}");
-
-        Console.WriteLine();
-
-        Console.WriteLine(
-            "La huella fue recibida correctamente.");
-
-        Console.WriteLine(
-            "========================================");
+            "El K30 no devolvió datos de asistencia.");
     }
-}
-catch (OperationCanceledException)
-{
+
     Console.WriteLine();
+    Console.WriteLine("========================================");
     Console.WriteLine(
-        "Prueba cancelada.");
+        "El programa NO ejecuta ningún comando para");
+    Console.WriteLine(
+        "borrar el historial del K30.");
+    Console.WriteLine("========================================");
 }
 catch (Exception ex)
 {
     Console.WriteLine();
-    Console.WriteLine(
-        "========================================");
-
-    Console.WriteLine(
-        "                ERROR                   ");
-
-    Console.WriteLine(
-        "========================================");
+    Console.WriteLine("========================================");
+    Console.WriteLine("                ERROR                   ");
+    Console.WriteLine("========================================");
 
     Console.WriteLine();
     Console.WriteLine(ex.Message);
+
     Console.WriteLine();
     Console.WriteLine(ex);
 }
 finally
 {
     Console.WriteLine();
-    Console.WriteLine(
-        "Desconectando del K30...");
+    Console.WriteLine("Desconectando del K30...");
 
     await k30.DisconnectAsync();
 
     Console.WriteLine(
         "Conexión finalizada.");
-}
-
-static string GetVerifyModeName(
-    int mode)
-{
-    return mode switch
-    {
-        0 => "Password",
-        1 => "Huella",
-        2 => "Tarjeta",
-        _ => $"Desconocido ({mode})"
-    };
 }

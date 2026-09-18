@@ -25,7 +25,7 @@ public class ZkClient : IDisposable
 
 
     // ============================================================
-    // Constructor
+    // CONSTRUCTOR
     // ============================================================
 
     public ZkClient(string ip, int port = 4370)
@@ -45,7 +45,9 @@ public class ZkClient : IDisposable
 
         _client = new TcpClient();
 
-        await _client.ConnectAsync(_ip, _port);
+        await _client.ConnectAsync(
+            _ip,
+            _port);
 
         _stream = _client.GetStream();
 
@@ -93,8 +95,6 @@ public class ZkClient : IDisposable
         }
         catch
         {
-            // La conexión puede haber sido cerrada
-            // previamente por el dispositivo.
         }
 
         try
@@ -195,7 +195,8 @@ public class ZkClient : IDisposable
                 data);
 
         Console.WriteLine(
-            $"Realtime response: Command={response.Command}");
+            $"Realtime response: " +
+            $"Command={response.Command}");
 
         if (!response.IsOk)
         {
@@ -217,7 +218,8 @@ public class ZkClient : IDisposable
         while (!cancellationToken.IsCancellationRequested)
         {
             ZkPacket packet =
-                await ReadPacketAsync(cancellationToken);
+                await ReadPacketAsync(
+                    cancellationToken);
 
             if (packet.Command !=
                 ZkProtocol.CMD_REG_EVENT)
@@ -412,7 +414,7 @@ public class ZkClient : IDisposable
 
 
     // ============================================================
-    // ATTENDANCE - TEST
+    // READ ATTENDANCE
     // ============================================================
 
     public async Task<byte[]> ReadAttendanceRawAsync()
@@ -435,54 +437,223 @@ public class ZkClient : IDisposable
 
         try
         {
+            // ----------------------------------------------------
+            // 1. Solicitar historial
+            // ----------------------------------------------------
+
             Console.WriteLine();
             Console.WriteLine(
                 "Solicitando historial de asistencias...");
 
-            /*
-             * CMD_ATTLOG_RRQ = 13
-             *
-             * Según el protocolo ZKTeco, esta orden
-             * solicita los registros de asistencia.
-             *
-             * No se envía ningún comando de borrado.
-             */
-            ZkResponse response =
+            ZkResponse prepareResponse =
                 await SendAsync(
                     ZkProtocol.CMD_ATTLOG_RRQ,
                     []);
 
             Console.WriteLine(
                 $"Attendance response: " +
-                $"Command={response.Command}");
+                $"Command={prepareResponse.Command}");
 
             Console.WriteLine(
                 $"Attendance data length: " +
-                $"{response.Data.Length}");
+                $"{prepareResponse.Data.Length}");
 
-            if (response.Data.Length > 0)
-            {
-                Console.WriteLine(
-                    $"Attendance data: " +
-                    $"{Convert.ToHexString(response.Data)}");
-            }
-
-            if (!response.IsOk &&
-                response.Command !=
-                    ZkProtocol.CMD_ACK_DATA)
+            if (prepareResponse.Command !=
+                ZkProtocol.CMD_PREPARE_DATA)
             {
                 throw new InvalidOperationException(
-                    "El K30 rechazó la solicitud de " +
-                    "asistencias. " +
-                    $"Command={response.Command}");
+                    "El K30 no respondió con " +
+                    "CMD_PREPARE_DATA. " +
+                    $"Command={prepareResponse.Command}");
             }
 
-            return response.Data;
+            if (prepareResponse.Data.Length < 4)
+            {
+                throw new InvalidOperationException(
+                    "La respuesta CMD_PREPARE_DATA " +
+                    "no contiene el tamaño de los datos.");
+            }
+
+
+            // ----------------------------------------------------
+            // 2. Obtener tamaño total
+            // ----------------------------------------------------
+
+            uint totalSize =
+                BinaryPrimitives.ReadUInt32LittleEndian(
+                    prepareResponse.Data.AsSpan(0, 4));
+
+            Console.WriteLine();
+            Console.WriteLine(
+                $"Tamaño total anunciado por K30: " +
+                $"{totalSize} bytes");
+
+
+            if (totalSize == 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine(
+                    "El K30 no tiene asistencias almacenadas.");
+
+                await FreeDataAsync();
+
+                return [];
+            }
+
+
+            // ----------------------------------------------------
+            // 3. Recibir CMD_DATA
+            // ----------------------------------------------------
+
+            List<byte> allData =
+                new((int)totalSize);
+
+            Console.WriteLine();
+            Console.WriteLine(
+                "Esperando paquetes CMD_DATA...");
+
+            while (allData.Count < totalSize)
+            {
+                ZkPacket dataPacket =
+                    await ReadPacketAsync();
+
+                Console.WriteLine();
+                Console.WriteLine(
+                    $"Paquete de datos recibido: " +
+                    $"Command={dataPacket.Command}");
+
+                Console.WriteLine(
+                    $"DataLength={dataPacket.Data.Length}");
+
+                if (dataPacket.Command !=
+                    ZkProtocol.CMD_DATA)
+                {
+                    throw new InvalidOperationException(
+                        "El K30 envió un paquete inesperado " +
+                        "durante la lectura de asistencias. " +
+                        $"Command={dataPacket.Command}");
+                }
+
+                if (dataPacket.Data.Length == 0)
+                {
+                    throw new InvalidOperationException(
+                        "El K30 envió un paquete CMD_DATA " +
+                        "sin datos.");
+                }
+
+                allData.AddRange(
+                    dataPacket.Data);
+
+                Console.WriteLine(
+                    $"Datos acumulados: " +
+                    $"{allData.Count}/{totalSize}");
+            }
+
+
+            // ----------------------------------------------------
+            // 4. Ajustar exactamente al tamaño anunciado
+            // ----------------------------------------------------
+
+            if (allData.Count > totalSize)
+            {
+                allData =
+                    allData
+                        .Take((int)totalSize)
+                        .ToList();
+            }
+
+            byte[] result =
+                allData.ToArray();
+
+
+            // ----------------------------------------------------
+            // 5. Mostrar información de la transferencia
+            // ----------------------------------------------------
+
+            Console.WriteLine();
+            Console.WriteLine(
+                "Transferencia completada.");
+
+            Console.WriteLine(
+                $"Bytes recibidos: {result.Length}");
+
+            if (result.Length >= 4)
+            {
+                uint recordDataSize =
+                    BinaryPrimitives
+                        .ReadUInt32LittleEndian(
+                            result.AsSpan(0, 4));
+
+                Console.WriteLine(
+                    $"Tamaño indicado dentro de CMD_DATA: " +
+                    $"{recordDataSize} bytes");
+
+                if (recordDataSize % 40 == 0)
+                {
+                    int recordCount =
+                        (int)recordDataSize / 40;
+
+                    Console.WriteLine(
+                        $"Registros detectados: " +
+                        $"{recordCount}");
+                }
+                else
+                {
+                    Console.WriteLine(
+                        "El tamaño de registros no es " +
+                        "múltiplo de 40; lo analizaremos " +
+                        "en el siguiente paso.");
+                }
+            }
+
+
+            // ----------------------------------------------------
+            // 6. Liberar buffer del K30
+            // ----------------------------------------------------
+
+            await FreeDataAsync();
+
+            return result;
         }
         finally
         {
+            // ----------------------------------------------------
+            // 7. Volver a habilitar dispositivo
+            // ----------------------------------------------------
+
             await EnableDeviceAsync();
         }
+    }
+
+
+    // ============================================================
+    // FREE DATA
+    // ============================================================
+
+    private async Task FreeDataAsync()
+    {
+        Console.WriteLine();
+        Console.WriteLine(
+            "Liberando buffer de datos del K30...");
+
+        ZkResponse response =
+            await SendAsync(
+                ZkProtocol.CMD_FREE_DATA,
+                []);
+
+        Console.WriteLine(
+            $"FREE_DATA response: " +
+            $"Command={response.Command}");
+
+        if (!response.IsOk)
+        {
+            throw new InvalidOperationException(
+                "El K30 rechazó CMD_FREE_DATA. " +
+                $"Command={response.Command}");
+        }
+
+        Console.WriteLine(
+            "Buffer liberado correctamente.");
     }
 
 
@@ -536,7 +707,8 @@ public class ZkClient : IDisposable
 
         Console.WriteLine(
             $"RX: " +
-            $"{Convert.ToHexString(responsePacket.Encode())}");
+            $"{Convert.ToHexString(
+                responsePacket.Encode())}");
 
         return new ZkResponse
         {

@@ -23,14 +23,20 @@ public class ZkClient : IDisposable
         _client?.Connected == true &&
         _stream != null;
 
+
+    // ============================================================
+    // Constructor
+    // ============================================================
+
     public ZkClient(string ip, int port = 4370)
     {
         _ip = ip;
         _port = port;
     }
 
+
     // ============================================================
-    // CONNECTION
+    // CONNECT
     // ============================================================
 
     public async Task ConnectAsync()
@@ -54,10 +60,12 @@ public class ZkClient : IDisposable
         if (!response.IsOk)
         {
             throw new InvalidOperationException(
-                $"El K30 rechazó la conexión. Command={response.Command}");
+                $"El K30 rechazó la conexión. " +
+                $"Command={response.Command}");
         }
 
         _sessionId = response.SessionId;
+
         _replyId = 0;
 
         Console.WriteLine(
@@ -66,6 +74,11 @@ public class ZkClient : IDisposable
         Console.WriteLine(
             $"Session ID: {_sessionId}");
     }
+
+
+    // ============================================================
+    // DISCONNECT
+    // ============================================================
 
     public async Task DisconnectAsync()
     {
@@ -80,8 +93,8 @@ public class ZkClient : IDisposable
         }
         catch
         {
-            // La conexión puede haberse cerrado
-            // remotamente. No propagamos el error.
+            // La conexión puede haber sido cerrada
+            // previamente por el dispositivo.
         }
 
         try
@@ -97,6 +110,65 @@ public class ZkClient : IDisposable
         _client = null;
     }
 
+
+    // ============================================================
+    // DISABLE DEVICE
+    // ============================================================
+
+    public async Task DisableDeviceAsync()
+    {
+        EnsureConnected();
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Deshabilitando temporalmente el K30...");
+
+        ZkResponse response =
+            await SendAsync(
+                ZkProtocol.CMD_DISABLE_DEVICE,
+                []);
+
+        if (!response.IsOk)
+        {
+            throw new InvalidOperationException(
+                $"El K30 rechazó CMD_DISABLE_DEVICE. " +
+                $"Command={response.Command}");
+        }
+
+        Console.WriteLine(
+            "K30 deshabilitado temporalmente.");
+    }
+
+
+    // ============================================================
+    // ENABLE DEVICE
+    // ============================================================
+
+    public async Task EnableDeviceAsync()
+    {
+        EnsureConnected();
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "Habilitando nuevamente el K30...");
+
+        ZkResponse response =
+            await SendAsync(
+                ZkProtocol.CMD_ENABLE_DEVICE,
+                []);
+
+        if (!response.IsOk)
+        {
+            throw new InvalidOperationException(
+                $"El K30 rechazó CMD_ENABLE_DEVICE. " +
+                $"Command={response.Command}");
+        }
+
+        Console.WriteLine(
+            "K30 habilitado nuevamente.");
+    }
+
+
     // ============================================================
     // REALTIME
     // ============================================================
@@ -104,16 +176,6 @@ public class ZkClient : IDisposable
     public async Task EnableRealtimeAsync()
     {
         EnsureConnected();
-
-        /*
-         * Documentación ZKTeco:
-         *
-         * CMD_REG_EVENT
-         * data = FF FF 00 00
-         *
-         * Esto registra la conexión para recibir
-         * eventos realtime.
-         */
 
         byte[] data =
         [
@@ -138,12 +200,14 @@ public class ZkClient : IDisposable
         if (!response.IsOk)
         {
             throw new InvalidOperationException(
-                $"El K30 rechazó CMD_REG_EVENT. Command={response.Command}");
+                $"El K30 rechazó CMD_REG_EVENT. " +
+                $"Command={response.Command}");
         }
 
         Console.WriteLine(
             "Eventos realtime habilitados.");
     }
+
 
     public async Task<ZkRealtimeEvent> WaitForRealtimeEventAsync(
         CancellationToken cancellationToken = default)
@@ -155,25 +219,21 @@ public class ZkClient : IDisposable
             ZkPacket packet =
                 await ReadPacketAsync(cancellationToken);
 
-            if (packet.Command != ZkProtocol.CMD_REG_EVENT)
+            if (packet.Command !=
+                ZkProtocol.CMD_REG_EVENT)
             {
                 Console.WriteLine();
+
                 Console.WriteLine(
-                    $"Paquete recibido mientras esperábamos evento: Command={packet.Command}");
+                    "Paquete recibido mientras " +
+                    "esperábamos evento: " +
+                    $"Command={packet.Command}");
 
                 continue;
             }
 
             ZkRealtimeEvent realtimeEvent =
                 ParseRealtimeEvent(packet);
-
-            /*
-             * El protocolo indica que el cliente debe responder
-             * al evento con ACK_OK.
-             *
-             * El SessionId de esta respuesta debe ser el SessionId
-             * de la conexión, NO el código del evento.
-             */
 
             await SendRealtimeAckAsync(
                 packet.ReplyId,
@@ -185,6 +245,7 @@ public class ZkClient : IDisposable
         throw new OperationCanceledException(
             cancellationToken);
     }
+
 
     private async Task SendRealtimeAckAsync(
         ushort replyId,
@@ -200,11 +261,12 @@ public class ZkClient : IDisposable
             Data = []
         };
 
-        byte[] bytes = packet.Encode();
+        byte[] bytes =
+            packet.Encode();
 
-        Console.WriteLine();
         Console.WriteLine(
-            $"TX REALTIME ACK: {Convert.ToHexString(bytes)}");
+            $"TX REALTIME ACK: " +
+            $"{Convert.ToHexString(bytes)}");
 
         await _stream!.WriteAsync(
             bytes,
@@ -213,6 +275,7 @@ public class ZkClient : IDisposable
         await _stream.FlushAsync(
             cancellationToken);
     }
+
 
     private static ZkRealtimeEvent ParseRealtimeEvent(
         ZkPacket packet)
@@ -232,38 +295,26 @@ public class ZkClient : IDisposable
         };
     }
 
-    private static string ParseUserId(byte[] data)
-    {
-        /*
-         * EF_ATTLOG:
-         *
-         * Offset 0
-         * Length 9
-         *
-         * User ID is stored as an ASCII string.
-         */
 
+    private static string ParseUserId(
+        byte[] data)
+    {
         if (data.Length < 9)
             return string.Empty;
 
         return Encoding.ASCII
             .GetString(data, 0, 9)
-            .Trim('\0', ' ', '\r', '\n');
+            .Trim(
+                '\0',
+                ' ',
+                '\r',
+                '\n');
     }
+
 
     private static DateTime? ParseRealtimeTimestamp(
         byte[] data)
     {
-        /*
-         * EF_ATTLOG:
-         *
-         * Offset 26
-         *
-         * 6 bytes:
-         *
-         * YY MM DD HH MM SS
-         */
-
         if (data.Length < 32)
             return null;
 
@@ -301,55 +352,6 @@ public class ZkClient : IDisposable
         }
     }
 
-    // ============================================================
-    // DEVICE
-    // ============================================================
-
-    public async Task DisableDeviceAsync()
-    {
-        EnsureConnected();
-
-        Console.WriteLine();
-        Console.WriteLine(
-            "Deshabilitando temporalmente el K30...");
-
-        ZkResponse response =
-            await SendAsync(
-                ZkProtocol.CMD_DISABLE_DEVICE,
-                []);
-
-        if (!response.IsOk)
-        {
-            throw new InvalidOperationException(
-                $"El K30 rechazó CMD_DISABLE_DEVICE. Command={response.Command}");
-        }
-
-        Console.WriteLine(
-            "K30 deshabilitado temporalmente.");
-    }
-
-    public async Task EnableDeviceAsync()
-    {
-        EnsureConnected();
-
-        Console.WriteLine();
-        Console.WriteLine(
-            "Habilitando nuevamente el K30...");
-
-        ZkResponse response =
-            await SendAsync(
-                ZkProtocol.CMD_ENABLE_DEVICE,
-                []);
-
-        if (!response.IsOk)
-        {
-            throw new InvalidOperationException(
-                $"El K30 rechazó CMD_ENABLE_DEVICE. Command={response.Command}");
-        }
-
-        Console.WriteLine(
-            "K30 habilitado nuevamente.");
-    }
 
     // ============================================================
     // OPTIONS
@@ -374,7 +376,8 @@ public class ZkClient : IDisposable
                 data);
 
         Console.WriteLine(
-            $"Option response: Command={response.Command}");
+            $"Option response: " +
+            $"Command={response.Command}");
 
         if (!response.IsOk)
         {
@@ -395,7 +398,11 @@ public class ZkClient : IDisposable
         string result =
             Encoding.ASCII
                 .GetString(response.Data)
-                .Trim('\0', ' ', '\r', '\n');
+                .Trim(
+                    '\0',
+                    ' ',
+                    '\r',
+                    '\n');
 
         Console.WriteLine(
             $"Option result: {result}");
@@ -403,8 +410,84 @@ public class ZkClient : IDisposable
         return result;
     }
 
+
     // ============================================================
-    // GENERIC SEND
+    // ATTENDANCE - TEST
+    // ============================================================
+
+    public async Task<byte[]> ReadAttendanceRawAsync()
+    {
+        EnsureConnected();
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "========================================");
+
+        Console.WriteLine(
+            "       LECTURA HISTORIAL K30            ");
+
+        Console.WriteLine(
+            "========================================");
+
+        Console.WriteLine();
+
+        await DisableDeviceAsync();
+
+        try
+        {
+            Console.WriteLine();
+            Console.WriteLine(
+                "Solicitando historial de asistencias...");
+
+            /*
+             * CMD_ATTLOG_RRQ = 13
+             *
+             * Según el protocolo ZKTeco, esta orden
+             * solicita los registros de asistencia.
+             *
+             * No se envía ningún comando de borrado.
+             */
+            ZkResponse response =
+                await SendAsync(
+                    ZkProtocol.CMD_ATTLOG_RRQ,
+                    []);
+
+            Console.WriteLine(
+                $"Attendance response: " +
+                $"Command={response.Command}");
+
+            Console.WriteLine(
+                $"Attendance data length: " +
+                $"{response.Data.Length}");
+
+            if (response.Data.Length > 0)
+            {
+                Console.WriteLine(
+                    $"Attendance data: " +
+                    $"{Convert.ToHexString(response.Data)}");
+            }
+
+            if (!response.IsOk &&
+                response.Command !=
+                    ZkProtocol.CMD_ACK_DATA)
+            {
+                throw new InvalidOperationException(
+                    "El K30 rechazó la solicitud de " +
+                    "asistencias. " +
+                    $"Command={response.Command}");
+            }
+
+            return response.Data;
+        }
+        finally
+        {
+            await EnableDeviceAsync();
+        }
+    }
+
+
+    // ============================================================
+    // GENERIC COMMAND
     // ============================================================
 
     public async Task<ZkResponse> SendCommandAsync(
@@ -415,6 +498,11 @@ public class ZkClient : IDisposable
             command,
             data ?? []);
     }
+
+
+    // ============================================================
+    // LOW LEVEL SEND
+    // ============================================================
 
     private async Task<ZkResponse> SendAsync(
         ushort command,
@@ -447,20 +535,31 @@ public class ZkClient : IDisposable
             await ReadPacketAsync();
 
         Console.WriteLine(
-            $"RX: {Convert.ToHexString(responsePacket.Encode())}");
+            $"RX: " +
+            $"{Convert.ToHexString(responsePacket.Encode())}");
 
         return new ZkResponse
         {
-            Command = responsePacket.Command,
-            Checksum = responsePacket.Checksum,
-            SessionId = responsePacket.SessionId,
-            ReplyId = responsePacket.ReplyId,
-            Data = responsePacket.Data
+            Command =
+                responsePacket.Command,
+
+            Checksum =
+                responsePacket.Checksum,
+
+            SessionId =
+                responsePacket.SessionId,
+
+            ReplyId =
+                responsePacket.ReplyId,
+
+            Data =
+                responsePacket.Data
         };
     }
 
+
     // ============================================================
-    // PACKET READER
+    // READ PACKET
     // ============================================================
 
     private async Task<ZkPacket> ReadPacketAsync(
@@ -473,23 +572,29 @@ public class ZkClient : IDisposable
                 8,
                 cancellationToken);
 
-        if (header[0] != ZkProtocol.Header1 ||
-            header[1] != ZkProtocol.Header2 ||
-            header[2] != ZkProtocol.Header3 ||
-            header[3] != ZkProtocol.Header4)
+        if (header[0] !=
+                ZkProtocol.Header1 ||
+            header[1] !=
+                ZkProtocol.Header2 ||
+            header[2] !=
+                ZkProtocol.Header3 ||
+            header[3] !=
+                ZkProtocol.Header4)
         {
             throw new InvalidOperationException(
                 "Header ZKTeco inválido.");
         }
 
         uint payloadSize =
-            BinaryPrimitives.ReadUInt32LittleEndian(
-                header.AsSpan(4, 4));
+            BinaryPrimitives
+                .ReadUInt32LittleEndian(
+                    header.AsSpan(4, 4));
 
         if (payloadSize < 8)
         {
             throw new InvalidOperationException(
-                $"Payload ZKTeco inválido: {payloadSize}");
+                $"Payload ZKTeco inválido: " +
+                $"{payloadSize}");
         }
 
         byte[] payload =
@@ -517,6 +622,11 @@ public class ZkClient : IDisposable
         return ZkPacket.Decode(
             completePacket);
     }
+
+
+    // ============================================================
+    // READ EXACT
+    // ============================================================
 
     private async Task<byte[]> ReadExactAsync(
         int length,
@@ -548,8 +658,9 @@ public class ZkClient : IDisposable
         return buffer;
     }
 
+
     // ============================================================
-    // HELPERS
+    // VALIDATION
     // ============================================================
 
     private void EnsureConnected()
@@ -561,6 +672,7 @@ public class ZkClient : IDisposable
         }
     }
 
+
     private void EnsureNotDisposed()
     {
         if (_disposed)
@@ -569,6 +681,11 @@ public class ZkClient : IDisposable
                 nameof(ZkClient));
         }
     }
+
+
+    // ============================================================
+    // DISPOSE
+    // ============================================================
 
     public void Dispose()
     {
@@ -602,33 +719,61 @@ public class ZkRealtimeEvent
 
     public byte[] Data { get; set; } = [];
 
-    public string UserId { get; set; } = string.Empty;
+    public string UserId { get; set; } =
+        string.Empty;
 
     public DateTime? Timestamp { get; set; }
 
+
     public bool IsAttendance =>
-        EventCode == ZkProtocol.EF_ATTLOG;
+        EventCode ==
+        ZkProtocol.EF_ATTLOG;
+
 
     public bool IsFinger =>
-        EventCode == ZkProtocol.EF_FINGER;
+        EventCode ==
+        ZkProtocol.EF_FINGER;
+
 
     public bool IsVerify =>
-        EventCode == ZkProtocol.EF_VERIFY;
+        EventCode ==
+        ZkProtocol.EF_VERIFY;
+
 
     public string EventName =>
         EventCode switch
         {
-            ZkProtocol.EF_ATTLOG => "Asistencia",
-            ZkProtocol.EF_FINGER => "Huella detectada",
-            ZkProtocol.EF_VERIFY => "Usuario verificado",
-            ZkProtocol.EF_ENROLLUSER => "Usuario registrado",
-            ZkProtocol.EF_ENROLLFINGER => "Huella registrada",
-            ZkProtocol.EF_BUTTON => "Botón",
-            ZkProtocol.EF_UNLOCK => "Desbloqueo",
-            ZkProtocol.EF_FPFTR => "Fingerprint feature",
-            ZkProtocol.EF_ALARM => "Alarma",
-            _ => $"Evento {EventCode}"
+            ZkProtocol.EF_ATTLOG =>
+                "Asistencia",
+
+            ZkProtocol.EF_FINGER =>
+                "Huella detectada",
+
+            ZkProtocol.EF_VERIFY =>
+                "Usuario verificado",
+
+            ZkProtocol.EF_ENROLLUSER =>
+                "Usuario registrado",
+
+            ZkProtocol.EF_ENROLLFINGER =>
+                "Huella registrada",
+
+            ZkProtocol.EF_BUTTON =>
+                "Botón",
+
+            ZkProtocol.EF_UNLOCK =>
+                "Desbloqueo",
+
+            ZkProtocol.EF_FPFTR =>
+                "Fingerprint feature",
+
+            ZkProtocol.EF_ALARM =>
+                "Alarma",
+
+            _ =>
+                $"Evento {EventCode}"
         };
+
 
     public override string ToString()
     {

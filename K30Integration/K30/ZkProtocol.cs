@@ -2,31 +2,82 @@ namespace K30Integration.K30;
 
 public static class ZkProtocol
 {
+    // ============================================================
+    // PACKET HEADER
+    // ============================================================
+
     public const byte Header1 = 0x50;
     public const byte Header2 = 0x50;
     public const byte Header3 = 0x82;
     public const byte Header4 = 0x7D;
+
+
+    // ============================================================
+    // CONNECTION
+    // ============================================================
 
     public const ushort CMD_CONNECT = 1000;
     public const ushort CMD_EXIT = 1001;
     public const ushort CMD_ENABLE_DEVICE = 1002;
     public const ushort CMD_DISABLE_DEVICE = 1003;
 
+
+    // ============================================================
+    // DEVICE INFORMATION
+    // ============================================================
+
     public const ushort CMD_GET_FREE_SIZES = 50;
     public const ushort CMD_STATE_RRQ = 64;
     public const ushort CMD_GET_TIME = 201;
     public const ushort CMD_GET_VERSION = 1100;
 
+
+    // ============================================================
+    // OPTIONS
+    // ============================================================
+
     public const ushort CMD_OPTIONS_RRQ = 11;
     public const ushort CMD_OPTIONS_WRQ = 12;
 
+
+    // ============================================================
+    // DATA
+    // ============================================================
+
+    public const ushort CMD_DB_RRQ = 7;
+    public const ushort CMD_USER_WRQ = 8;
+    public const ushort CMD_USERTEMP_RRQ = 9;
+    public const ushort CMD_USERTEMP_WRQ = 10;
+
     public const ushort CMD_ATTLOG_RRQ = 13;
 
-    public const ushort CMD_PREPARE_DATA = 1500;
-    public const ushort CMD_DATA = 1501;
-    public const ushort CMD_FREE_DATA = 1502;
+    public const ushort CMD_CLEAR_DATA = 14;
+    public const ushort CMD_CLEAR_ATTLOG = 15;
+
+
+    // ============================================================
+    // LARGE DATA TRANSFER
+    // ============================================================
+
+    // Request/read large dataset.
     public const ushort CMD_DATA_WRRQ = 1503;
+
+    // Device tells that prepared data is ready.
     public const ushort CMD_DATA_RDY = 1504;
+
+    // Device prepares data transmission.
+    public const ushort CMD_PREPARE_DATA = 1500;
+
+    // Data packet.
+    public const ushort CMD_DATA = 1501;
+
+    // Release device data buffer.
+    public const ushort CMD_FREE_DATA = 1502;
+
+
+    // ============================================================
+    // ACK
+    // ============================================================
 
     public const ushort CMD_ACK_OK = 2000;
     public const ushort CMD_ACK_ERROR = 2001;
@@ -34,7 +85,13 @@ public static class ZkProtocol
     public const ushort CMD_ACK_RETRY = 2003;
     public const ushort CMD_ACK_REPEAT = 2004;
     public const ushort CMD_ACK_UNAUTH = 2005;
+
     public const ushort CMD_ACK_UNKNOWN = 65535;
+
+
+    // ============================================================
+    // REALTIME EVENTS
+    // ============================================================
 
     public const ushort CMD_REG_EVENT = 500;
 
@@ -47,4 +104,17 @@ public static class ZkProtocol
     public const ushort EF_VERIFY = 128;
     public const ushort EF_FPFTR = 256;
     public const ushort EF_ALARM = 512;
+
+
+    // ============================================================
+    // FUNCTION TYPES
+    // ============================================================
+
+    public const int FCT_ATTLOG = 1;
+    public const int FCT_FINGERTMP = 2;
+    public const int FCT_OPLOG = 4;
+    public const int FCT_USER = 5;
+    public const int FCT_SMS = 6;
+    public const int FCT_UDATA = 7;
+    public const int FCT_WORKCODE = 8;
 }

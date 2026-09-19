@@ -1,109 +1,209 @@
 using K30Integration.K30;
+using K30Integration.K30.Models;
 
 Console.WriteLine("========================================");
-Console.WriteLine("       ETAPA 3 - DIAGNOSTICO ATTLOG");
+Console.WriteLine("       K30 - READ TEST");
 Console.WriteLine("========================================");
 Console.WriteLine();
 
 ZkClient client =
-    new ZkClient(
+    new(
         "192.168.1.201",
         4370);
 
 try
 {
-    // ========================================================
-    // 1. CONNECT
-    // ========================================================
+    // =========================================================
+    // CONNECT
+    // =========================================================
 
-    Console.WriteLine(
-        "1. Conectando...");
+    Console.WriteLine("1. CONNECT");
+    Console.WriteLine();
 
     await client.ConnectAsync();
 
     Console.WriteLine();
 
-    // ========================================================
-    // 2. INFORMACIÓN
-    // ========================================================
+    // =========================================================
+    // DEVICE INFO
+    // =========================================================
+
+    Console.WriteLine("2. DEVICE INFO");
+    Console.WriteLine();
+
+    string firmware =
+        await client.GetFirmwareAsync();
 
     Console.WriteLine(
-        "2. Información del dispositivo...");
+        $"Firmware: {firmware}");
 
-    await client.GetOptionAsync(
-        "~Platform");
+    string? serial =
+        await client.GetOptionAsync(
+            "~SerialNumber");
 
-    await client.GetOptionAsync(
-        "~ZKFPVersion");
+    Console.WriteLine(
+        $"Serial: {serial}");
+
+    string? deviceName =
+        await client.GetOptionAsync(
+            "~DeviceName");
+
+    Console.WriteLine(
+        $"Device: {deviceName}");
+
+    string? platform =
+        await client.GetOptionAsync(
+            "~Platform");
+
+    Console.WriteLine(
+        $"Platform: {platform}");
 
     Console.WriteLine();
 
-    // ========================================================
-    // 3. ATTLOG
-    // ========================================================
+    // =========================================================
+    // CAPACITY
+    // =========================================================
+
+    Console.WriteLine("3. CAPACITY");
+    Console.WriteLine();
+
+    DeviceCapacity capacity =
+        await client.GetFreeSizesAsync();
 
     Console.WriteLine(
-        "3. Leyendo historial de asistencias...");
+        capacity);
 
     Console.WriteLine();
 
-    List<K30Integration.K30.Models.AttendanceRecord>
-        records =
-        await client.ReadAttendanceAsync();
+    // =========================================================
+    // USERS
+    // =========================================================
 
-    // ========================================================
-    // 4. RESUMEN
-    // ========================================================
-
+    Console.WriteLine("4. USERS");
     Console.WriteLine();
-    Console.WriteLine(
-        "========================================");
 
-    Console.WriteLine(
-        "             DIAGNOSTICO FINAL");
-
-    Console.WriteLine(
-        "========================================");
-
-    Console.WriteLine(
-        $"Registros encontrados: {records.Count}");
+    List<K30User> users =
+        await client.ReadUsersAsync();
 
     Console.WriteLine();
 
     Console.WriteLine(
-        "Los datos anteriores son RAW.");
+        $"USERS RESULT: {users.Count}");
 
-    Console.WriteLine(
-        "Todavía NO se están interpretando como");
+    foreach (K30User user in users)
+    {
+        Console.WriteLine(
+            user);
+    }
 
-    Console.WriteLine(
-        "ID / fecha / método / estado.");
+    Console.WriteLine();
+
+    // =========================================================
+    // ATTENDANCE
+    // =========================================================
+
+    Console.WriteLine("5. ATTENDANCE");
+    Console.WriteLine();
+
+    byte[] attendanceRaw =
+        await client.ReadAttendanceRawDiscoveryAsync();
 
     Console.WriteLine();
 
     Console.WriteLine(
-        "El historial del K30 NO fue eliminado.");
+        $"ATTENDANCE RAW: " +
+        $"{attendanceRaw.Length} bytes");
+
+    // =========================================================
+    // PARSE
+    // =========================================================
+
+    Console.WriteLine();
+
+    Console.WriteLine(
+        "6. PARSING ATTENDANCE");
+
+    Console.WriteLine();
+
+    List<AttendanceRecord> records =
+        ZkClient.ParseAttendance(
+            attendanceRaw,
+            users);
+
+    Console.WriteLine();
+
+    Console.WriteLine(
+        $"ATTENDANCE RESULT: " +
+        $"{records.Count} records");
+
+    foreach (AttendanceRecord record in records)
+    {
+        Console.WriteLine(
+            record);
+    }
+
+    // =========================================================
+    // FIN
+    // =========================================================
+
+    Console.WriteLine();
+
+    Console.WriteLine("========================================");
+    Console.WriteLine("             READ COMPLETED");
+    Console.WriteLine("========================================");
+
+    Console.WriteLine();
+
+    Console.WriteLine(
+        $"Firmware : {firmware}");
+
+    Console.WriteLine(
+        $"Users    : {users.Count}");
+
+    Console.WriteLine(
+        $"Raw logs : {attendanceRaw.Length}");
+
+    Console.WriteLine(
+        $"Records  : {records.Count}");
+
+    Console.WriteLine();
+
+    Console.WriteLine(
+        "NO se eliminaron usuarios.");
+
+    Console.WriteLine(
+        "NO se eliminaron asistencias.");
+
+    Console.WriteLine(
+        "CMD_CLEAR_ATTLOG NO fue ejecutado.");
 }
 catch (Exception ex)
 {
     Console.WriteLine();
-    Console.WriteLine(
-        "========================================");
 
-    Console.WriteLine(
-        "                ERROR");
+    Console.WriteLine("========================================");
+    Console.WriteLine("                  ERROR");
+    Console.WriteLine("========================================");
 
-    Console.WriteLine(
-        "========================================");
+    Console.WriteLine();
 
     Console.WriteLine(
         ex.Message);
 
     Console.WriteLine();
+
     Console.WriteLine(
         ex.ToString());
 }
 finally
 {
+    Console.WriteLine();
+
+    Console.WriteLine(
+        "Desconectando...");
+
     await client.DisconnectAsync();
+
+    Console.WriteLine(
+        "Desconectado.");
 }

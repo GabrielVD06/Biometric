@@ -15,6 +15,9 @@ public class ZkResponse
     public bool IsOk =>
         Command == ZkProtocol.CMD_ACK_OK;
 
+    public bool IsError =>
+        Command == ZkProtocol.CMD_ACK_ERROR;
+
     public bool IsUnauthorized =>
         Command == ZkProtocol.CMD_ACK_UNAUTH;
 

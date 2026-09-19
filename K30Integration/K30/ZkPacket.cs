@@ -4,26 +4,29 @@ namespace K30Integration.K30;
 
 public class ZkPacket
 {
+    private const int TcpHeaderSize = 8;
+    private const int PacketHeaderSize = 8;
+
     public ushort Command { get; set; }
+
     public ushort Checksum { get; set; }
+
     public ushort SessionId { get; set; }
+
     public ushort ReplyId { get; set; }
 
     public byte[] Data { get; set; } = [];
 
-    private const int HeaderSize = 8;
-    private const int PayloadHeaderSize = 8;
+
+    // ============================================================
+    // ENCODE
+    // ============================================================
 
     public byte[] Encode()
     {
         byte[] data = Data ?? [];
 
-        if (data.Length % 2 != 0)
-        {
-            Array.Resize(ref data, data.Length + 1);
-        }
-
-        int payloadSize = PayloadHeaderSize + data.Length;
+        int payloadSize = PacketHeaderSize + data.Length;
 
         byte[] payload = new byte[payloadSize];
 
@@ -31,6 +34,7 @@ public class ZkPacket
             payload.AsSpan(0, 2),
             Command);
 
+        // Checksum = 0 while calculating checksum.
         BinaryPrimitives.WriteUInt16LittleEndian(
             payload.AsSpan(2, 2),
             0);
@@ -43,7 +47,10 @@ public class ZkPacket
             payload.AsSpan(6, 2),
             ReplyId);
 
-        data.CopyTo(payload, 8);
+        if (data.Length > 0)
+        {
+            data.CopyTo(payload, 8);
+        }
 
         Checksum = CalculateChecksum(payload);
 
@@ -51,7 +58,8 @@ public class ZkPacket
             payload.AsSpan(2, 2),
             Checksum);
 
-        byte[] packet = new byte[HeaderSize + payload.Length];
+        byte[] packet =
+            new byte[TcpHeaderSize + payload.Length];
 
         packet[0] = ZkProtocol.Header1;
         packet[1] = ZkProtocol.Header2;
@@ -62,16 +70,26 @@ public class ZkPacket
             packet.AsSpan(4, 4),
             (uint)payload.Length);
 
-        payload.CopyTo(packet, HeaderSize);
+        payload.CopyTo(packet, TcpHeaderSize);
 
         return packet;
     }
 
+
+    // ============================================================
+    // DECODE
+    // ============================================================
+
     public static ZkPacket Decode(byte[] packet)
     {
+        if (packet == null)
+            throw new ArgumentNullException(nameof(packet));
+
         if (packet.Length < 16)
+        {
             throw new ArgumentException(
                 "El paquete ZKTeco es demasiado pequeño.");
+        }
 
         if (packet[0] != ZkProtocol.Header1 ||
             packet[1] != ZkProtocol.Header2 ||
@@ -86,9 +104,21 @@ public class ZkPacket
             BinaryPrimitives.ReadUInt32LittleEndian(
                 packet.AsSpan(4, 4));
 
-        if (packet.Length < 8 + payloadSize)
+        if (payloadSize < 8)
+        {
             throw new ArgumentException(
-                "El paquete está incompleto.");
+                $"Payload ZKTeco inválido: {payloadSize}");
+        }
+
+        long totalSize =
+            TcpHeaderSize + (long)payloadSize;
+
+        if (packet.Length < totalSize)
+        {
+            throw new ArgumentException(
+                $"Paquete ZKTeco incompleto. " +
+                $"Esperado: {totalSize}, recibido: {packet.Length}");
+        }
 
         ushort command =
             BinaryPrimitives.ReadUInt16LittleEndian(
@@ -106,7 +136,8 @@ public class ZkPacket
             BinaryPrimitives.ReadUInt16LittleEndian(
                 packet.AsSpan(14, 2));
 
-        int dataLength = (int)payloadSize - 8;
+        int dataLength =
+            checked((int)payloadSize - PacketHeaderSize);
 
         byte[] data = [];
 
@@ -132,35 +163,56 @@ public class ZkPacket
         };
     }
 
+
+    // ============================================================
+    // CHECKSUM
+    // ============================================================
+
     private static ushort CalculateChecksum(byte[] payload)
     {
-        uint sum = 0;
+        if (payload.Length < 4)
+            throw new ArgumentException(
+                "Payload demasiado pequeño para checksum.");
 
-        for (int i = 0; i < payload.Length; i += 2)
+        uint checksum = 0;
+
+        int length = payload.Length;
+
+        int offset = 0;
+
+        while (offset + 1 < length)
         {
-            ushort value;
+            ushort value =
+                BinaryPrimitives.ReadUInt16LittleEndian(
+                    payload.AsSpan(offset, 2));
 
-            if (i == 2)
+            // Offset 2-3 = checksum field.
+            if (offset != 2)
             {
-                value = 0;
-            }
-            else
-            {
-                byte low = payload[i];
-
-                byte high =
-                    i + 1 < payload.Length
-                        ? payload[i + 1]
-                        : (byte)0;
-
-                value = (ushort)(low | (high << 8));
+                checksum += value;
             }
 
-            sum += value;
+            offset += 2;
         }
 
-        sum = (sum & 0xFFFF) + (sum >> 16);
+        // Odd payload: last byte is considered as a low byte
+        // with a zero high byte ONLY for checksum calculation.
+        if (offset < length)
+        {
+            checksum += payload[offset];
+        }
 
-        return (ushort)(sum ^ 0xFFFF);
+        // Fold 32-bit sum into 16 bits.
+        checksum =
+            (checksum & 0xFFFF) +
+            (checksum >> 16);
+
+        checksum =
+            (checksum & 0xFFFF) +
+            (checksum >> 16);
+
+        checksum = (~checksum) & 0xFFFF;
+
+        return (ushort)checksum;
     }
 }

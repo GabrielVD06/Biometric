@@ -6,15 +6,23 @@ public class AttendanceService
 {
     private readonly ZkClient _client;
 
-    public AttendanceService(ZkClient client)
+    public AttendanceService(
+        ZkClient client)
     {
         _client = client;
     }
 
-    public async Task<List<AttendanceRecord>> GetAttendanceAsync(
-        CancellationToken cancellationToken = default)
+    public async Task<List<AttendanceRecord>>
+        GetAttendanceAsync(
+            IReadOnlyList<K30User>? users = null,
+            CancellationToken cancellationToken = default)
     {
-        return await _client.ReadAttendanceAsync(
-            cancellationToken);
+        byte[] raw =
+            await _client.ReadAttendanceRawDiscoveryAsync(
+                cancellationToken);
+
+        return ZkClient.ParseAttendance(
+            raw,
+            users);
     }
 }
